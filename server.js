@@ -8,35 +8,22 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-const WebSocket = require('ws');
-const { createClient } = require('@supabase/supabase-js');
-
+// Supabase client
 const supabaseAdmin = createClient(
   process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY,
-  {
-    realtime: {
-      webSocket: WebSocket,
-    },
-  }
+  process.env.SUPABASE_SERVICE_ROLE_KEY
 );
 
-// ============================================
-// !!! IMPORTANT: SET YOUR WALLET ADDRESS HERE !!!
-// ============================================
-// Replace this with your actual BSC wallet address:
-// Example: 0x1234567890abcdef1234567890abcdef12345678
-const MERCHANT_WALLET = process.env.MERCHANT_WALLET_ADDRESS || 'PUT_YOUR_WALLET_ADDRESS_HERE';
-// ============================================
-
-const PRICE_PER_CALL_USDC = 0.01; // $0.01 per API call
+// Merchant wallet from .env
+const MERCHANT_WALLET = process.env.MERCHANT_WALLET_ADDRESS;
+const PRICE_PER_CALL_USDC = 0.01;
 
 function generateApiKey() {
   return 'ag_' + Math.random().toString(36).substring(2, 15) + 
          Math.random().toString(36).substring(2, 8);
 }
 
-// Create agent (free tier - 100 calls/month)
+// Create agent (free tier - 100 calls)
 app.post('/api/agents', async (req, res) => {
   const { userId, name } = req.body;
   
@@ -80,13 +67,11 @@ app.post('/api/log', async (req, res) => {
   
   // Check free tier
   if (agent.free_calls_remaining > 0) {
-    // Use free call
     await supabaseAdmin
       .from('agents')
       .update({ free_calls_remaining: agent.free_calls_remaining - 1 })
       .eq('id', agent.id);
     
-    // Save log
     const { action, prompt, response, tokens, latency_ms, cost_usd, success, error_message } = req.body;
     await supabaseAdmin.from('logs').insert([{
       agent_id: agent.id,
@@ -108,18 +93,15 @@ app.post('/api/log', async (req, res) => {
     return res.status(402).json(create402Response(MERCHANT_WALLET, PRICE_PER_CALL_USDC));
   }
   
-  // Verify payment
   const payment = await verifyPayment(paymentTx, PRICE_PER_CALL_USDC, MERCHANT_WALLET);
   
   if (!payment.valid) {
     return res.status(402).json({ 
       error: 'Payment required or invalid',
-      reason: payment.reason,
-      payment: create402Response(MERCHANT_WALLET, PRICE_PER_CALL_USDC).payment
+      reason: payment.reason
     });
   }
   
-  // Payment valid - record log
   const { action, prompt, response, tokens, latency_ms, cost_usd, success, error_message } = req.body;
   
   await supabaseAdmin.from('logs').insert([{
@@ -135,14 +117,10 @@ app.post('/api/log', async (req, res) => {
     payment_tx: paymentTx
   }]);
   
-  res.json({ 
-    success: true, 
-    message: 'Log recorded (paid via x402)',
-    payment_amount: payment.amount
-  });
+  res.json({ success: true, message: 'Log recorded (paid via x402)' });
 });
 
-// Get analytics
+// Analytics endpoint
 app.get('/api/analytics/:agentId', async (req, res) => {
   const { agentId } = req.params;
   
@@ -174,11 +152,12 @@ app.get('/api/analytics/:agentId', async (req, res) => {
   });
 });
 
+// Health check
 app.get('/health', (req, res) => {
   res.json({ status: 'operational', protocol: 'x402 on BSC', merchant_wallet: MERCHANT_WALLET });
 });
 
-const PORT = process.env.PORT || 3001;
+const PORT = process.env.PORT || 3002;
 app.listen(PORT, () => {
   console.log(`AgentLog x402 API running on port ${PORT}`);
   console.log(`Merchant wallet: ${MERCHANT_WALLET}`);
