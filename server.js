@@ -9,7 +9,7 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// Supabase client with WebSocket fix
+// Supabase client with WebSocket fix - THIS IS CRITICAL
 const supabaseAdmin = createClient(
   process.env.SUPABASE_URL,
   process.env.SUPABASE_SERVICE_ROLE_KEY,
@@ -20,7 +20,6 @@ const supabaseAdmin = createClient(
   }
 );
 
-// Merchant wallet from .env
 const MERCHANT_WALLET = process.env.MERCHANT_WALLET_ADDRESS;
 const PRICE_PER_CALL_USDC = 0.01;
 
@@ -29,7 +28,7 @@ function generateApiKey() {
          Math.random().toString(36).substring(2, 8);
 }
 
-// Create agent (free tier - 100 calls)
+// Create agent
 app.post('/api/agents', async (req, res) => {
   const { userId, name } = req.body;
   
@@ -51,7 +50,7 @@ app.post('/api/agents', async (req, res) => {
   res.json({ agent: data[0], apiKey });
 });
 
-// Log endpoint with x402 payment
+// Log endpoint
 app.post('/api/log', async (req, res) => {
   const apiKey = req.headers['x-api-key'];
   const paymentTx = req.headers['x-payment-tx'];
@@ -60,7 +59,6 @@ app.post('/api/log', async (req, res) => {
     return res.status(401).json({ error: 'API key required' });
   }
   
-  // Get agent
   const { data: agent, error } = await supabaseAdmin
     .from('agents')
     .select('id, free_calls_remaining')
@@ -71,7 +69,7 @@ app.post('/api/log', async (req, res) => {
     return res.status(401).json({ error: 'Invalid API key' });
   }
   
-  // Check free tier
+  // Free tier
   if (agent.free_calls_remaining > 0) {
     await supabaseAdmin
       .from('agents')
@@ -94,7 +92,7 @@ app.post('/api/log', async (req, res) => {
     return res.json({ success: true, message: 'Log recorded (free tier)', free_calls_remaining: agent.free_calls_remaining - 1 });
   }
   
-  // No free calls - require payment
+  // Paid tier
   if (!paymentTx) {
     return res.status(402).json(create402Response(MERCHANT_WALLET, PRICE_PER_CALL_USDC));
   }
@@ -102,10 +100,7 @@ app.post('/api/log', async (req, res) => {
   const payment = await verifyPayment(paymentTx, PRICE_PER_CALL_USDC, MERCHANT_WALLET);
   
   if (!payment.valid) {
-    return res.status(402).json({ 
-      error: 'Payment required or invalid',
-      reason: payment.reason
-    });
+    return res.status(402).json({ error: 'Payment required or invalid', reason: payment.reason });
   }
   
   const { action, prompt, response, tokens, latency_ms, cost_usd, success, error_message } = req.body;
@@ -126,7 +121,7 @@ app.post('/api/log', async (req, res) => {
   res.json({ success: true, message: 'Log recorded (paid via x402)' });
 });
 
-// Analytics endpoint
+// Analytics
 app.get('/api/analytics/:agentId', async (req, res) => {
   const { agentId } = req.params;
   
