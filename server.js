@@ -8,13 +8,10 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// Supabase client with Realtime DISABLED - no WebSocket needed
+// Supabase 1.x client - no WebSocket issues
 const supabaseAdmin = createClient(
   process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY,
-  {
-    realtime: { enabled: false }
-  }
+  process.env.SUPABASE_SERVICE_ROLE_KEY
 );
 
 const MERCHANT_WALLET = process.env.MERCHANT_WALLET_ADDRESS;
