@@ -8,9 +8,17 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+const WebSocket = require('ws');
+const { createClient } = require('@supabase/supabase-js');
+
 const supabaseAdmin = createClient(
   process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
+  process.env.SUPABASE_SERVICE_ROLE_KEY,
+  {
+    realtime: {
+      webSocket: WebSocket,
+    },
+  }
 );
 
 // ============================================
