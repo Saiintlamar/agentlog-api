@@ -1,7 +1,6 @@
 ﻿const express = require('express');
 const cors = require('cors');
 const { createClient } = require('@supabase/supabase-js');
-const WebSocket = require('ws');
 const { verifyPayment, create402Response } = require('./middleware/x402');
 require('dotenv').config();
 
@@ -9,14 +8,12 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// Supabase client with WebSocket fix - THIS IS CRITICAL
+// Supabase client with Realtime DISABLED - no WebSocket needed
 const supabaseAdmin = createClient(
   process.env.SUPABASE_URL,
   process.env.SUPABASE_SERVICE_ROLE_KEY,
   {
-    realtime: {
-      webSocket: WebSocket,
-    },
+    realtime: { enabled: false }
   }
 );
 
@@ -28,7 +25,6 @@ function generateApiKey() {
          Math.random().toString(36).substring(2, 8);
 }
 
-// Create agent
 app.post('/api/agents', async (req, res) => {
   const { userId, name } = req.body;
   
@@ -50,7 +46,6 @@ app.post('/api/agents', async (req, res) => {
   res.json({ agent: data[0], apiKey });
 });
 
-// Log endpoint
 app.post('/api/log', async (req, res) => {
   const apiKey = req.headers['x-api-key'];
   const paymentTx = req.headers['x-payment-tx'];
@@ -69,7 +64,6 @@ app.post('/api/log', async (req, res) => {
     return res.status(401).json({ error: 'Invalid API key' });
   }
   
-  // Free tier
   if (agent.free_calls_remaining > 0) {
     await supabaseAdmin
       .from('agents')
@@ -92,7 +86,6 @@ app.post('/api/log', async (req, res) => {
     return res.json({ success: true, message: 'Log recorded (free tier)', free_calls_remaining: agent.free_calls_remaining - 1 });
   }
   
-  // Paid tier
   if (!paymentTx) {
     return res.status(402).json(create402Response(MERCHANT_WALLET, PRICE_PER_CALL_USDC));
   }
@@ -121,7 +114,6 @@ app.post('/api/log', async (req, res) => {
   res.json({ success: true, message: 'Log recorded (paid via x402)' });
 });
 
-// Analytics
 app.get('/api/analytics/:agentId', async (req, res) => {
   const { agentId } = req.params;
   
@@ -153,7 +145,6 @@ app.get('/api/analytics/:agentId', async (req, res) => {
   });
 });
 
-// Health check
 app.get('/health', (req, res) => {
   res.json({ status: 'operational', protocol: 'x402 on BSC', merchant_wallet: MERCHANT_WALLET });
 });
