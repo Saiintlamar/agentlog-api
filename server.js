@@ -1,6 +1,7 @@
 ﻿const express = require('express');
 const cors = require('cors');
 const { createClient } = require('@supabase/supabase-js');
+const WebSocket = require('ws');
 const { verifyPayment, create402Response } = require('./middleware/x402');
 require('dotenv').config();
 
@@ -8,10 +9,15 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// Supabase client
+// Supabase client with WebSocket fix
 const supabaseAdmin = createClient(
   process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
+  process.env.SUPABASE_SERVICE_ROLE_KEY,
+  {
+    realtime: {
+      webSocket: WebSocket,
+    },
+  }
 );
 
 // Merchant wallet from .env
